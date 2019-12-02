@@ -27,8 +27,8 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.Query.Internal
 
             var (optimizedSelectExpression, canCache) = base.Optimize(selectExpression, parametersValues);
 
-            var searchConditionOptimized = (SelectExpression)new SearchConditionConvertingExpressionVisitor(Dependencies.SqlExpressionFactory)
-                .Visit(optimizedSelectExpression);
+            var searchConditionOptimized = (SelectExpression)new SearchConditionConvertingExpressionVisitor(
+                Dependencies.SqlExpressionFactory).Visit(optimizedSelectExpression);
 
             return (searchConditionOptimized, canCache);
         }
