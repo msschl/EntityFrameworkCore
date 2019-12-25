@@ -22,7 +22,13 @@ namespace Microsoft.EntityFrameworkCore
         {
             var actual = BuiltInDataTypesSqlServerTest.QueryForColumnTypes(
                 CreateContext(),
-                nameof(ObjectBackedDataTypes), nameof(NullableBackedDataTypes), nameof(NonNullableBackedDataTypes));
+                nameof(ObjectBackedDataTypes),
+                nameof(NullableBackedDataTypes),
+                nameof(NonNullableBackedDataTypes),
+                nameof(StructKeyDataType),
+                nameof(StructForeignKeyDataType),
+                nameof(ClassKeyDataType),
+                nameof(ClassForeignKeyDataType));
 
             const string expected = @"Animal.Id ---> [int] [Precision = 10 Scale = 0]
 AnimalDetails.AnimalId ---> [nullable int] [Precision = 10 Scale = 0]

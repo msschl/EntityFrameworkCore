@@ -29,6 +29,10 @@ namespace Microsoft.EntityFrameworkCore
                 nameof(ObjectBackedDataTypes),
                 nameof(NullableBackedDataTypes),
                 nameof(NonNullableBackedDataTypes),
+                nameof(StructKeyDataType),
+                nameof(StructForeignKeyDataType),
+                nameof(ClassKeyDataType),
+                nameof(ClassForeignKeyDataType),
                 nameof(AnimalDetails));
 
             const string expected = @"Animal.Id ---> [varbinary] [MaxLength = 4]

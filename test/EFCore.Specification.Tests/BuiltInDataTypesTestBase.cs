@@ -10,6 +10,7 @@ using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Microsoft.EntityFrameworkCore.TestUtilities;
 using Xunit;
 
@@ -1499,6 +1500,172 @@ namespace Microsoft.EntityFrameworkCore
         }
 
         [ConditionalFact]
+        public virtual void Can_insert_and_read_back_with_struct_key()
+        {
+            using (var context = CreateContext())
+            {
+                context.Set<StructKeyDataType>().AddRange(
+                    new StructKeyDataType { Id = new KeyStruct { Id = 1 }, Ex = "X1" },
+                    new StructKeyDataType { Id = new KeyStruct { Id = 2 }, Ex = "X3" },
+                    new StructKeyDataType { Id = new KeyStruct { Id = 3 }, Ex = "X2" });
+
+                context.Set<StructForeignKeyDataType>().AddRange(
+                    new StructForeignKeyDataType { Id = new KeyStruct { Id = 11 }, StructKeyDataTypeId = new KeyStruct { Id = 1 } },
+                    new StructForeignKeyDataType { Id = new KeyStruct { Id = 12 }, StructKeyDataTypeId = new KeyStruct { Id = 2 } },
+                    new StructForeignKeyDataType { Id = new KeyStruct { Id = 13 }, StructKeyDataTypeId = new KeyStruct { Id = 3 } });
+
+                Assert.Equal(6, context.SaveChanges());
+            }
+
+            StructKeyDataType QueryByStructKey(DbContext context, KeyStruct id)
+                => context
+                    .Set<StructKeyDataType>()
+                    .Include(e => e.Dependents)
+                    .Where(e => e.Id.Equals(id))
+                    .ToList().Single();
+
+            using (var context = CreateContext())
+            {
+                var entity1 = QueryByStructKey(context, new KeyStruct { Id = 1 });
+                Assert.Equal(new KeyStruct { Id = 1 }, entity1.Id);
+                Assert.Equal(1, entity1.Dependents.Count);
+
+                var entity2 = QueryByStructKey(context, new KeyStruct { Id = 2 });
+                Assert.Equal(new KeyStruct { Id = 2 }, entity2.Id);
+                Assert.Equal(1, entity2.Dependents.Count);
+
+                var entity3 = QueryByStructKey(context, new KeyStruct { Id = 3 });
+                Assert.Equal(new KeyStruct { Id = 3 }, entity3.Id);
+                Assert.Equal(1, entity3.Dependents.Count);
+
+                entity3.Ex = "Xx1";
+                entity2.Ex = "Xx3";
+                entity1.Ex = "Xx7";
+
+                entity1.Dependents.Single().StructKeyDataTypeId = new KeyStruct { Id = 3 };
+                entity2.Dependents.Single().StructKeyDataTypeId = new KeyStruct { Id = 3 };
+
+                context.SaveChanges();
+            }
+
+            using (var context = CreateContext())
+            {
+                var entity1 = QueryByStructKey(context, new KeyStruct { Id = 1 });
+                Assert.Equal("Xx7", entity1.Ex);
+                Assert.Equal(0, entity1.Dependents.Count);
+
+                var entity2 = QueryByStructKey(context, new KeyStruct { Id = 2 });
+                Assert.Equal("Xx3", entity2.Ex);
+                Assert.Equal(0, entity2.Dependents.Count);
+
+                var entity3 = QueryByStructKey(context, new KeyStruct { Id = 3 });
+                Assert.Equal("Xx1", entity3.Ex);
+                Assert.Equal(3, entity3.Dependents.Count);
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Can_insert_and_read_back_with_null_struct_foreign_key()
+        {
+            using (var context = CreateContext())
+            {
+                context.Set<StructForeignKeyDataType>().Add(new StructForeignKeyDataType { Id = new KeyStruct { Id = 78 } });
+
+                Assert.Equal(1, context.SaveChanges());
+            }
+
+            using (var context = CreateContext())
+            {
+                var entity = context.Set<StructForeignKeyDataType>().Where(e => e.Id == new KeyStruct { Id = 78 }).ToList().Single();
+
+                Assert.Null(entity.StructKeyDataTypeId);
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Can_insert_and_read_back_with_class_key()
+        {
+            using (var context = CreateContext())
+            {
+                context.Set<ClassKeyDataType>().AddRange(
+                    new ClassKeyDataType { Id = new KeyClass { Id = 1 }, Ex = "X1" },
+                    new ClassKeyDataType { Id = new KeyClass { Id = 2 }, Ex = "X3" },
+                    new ClassKeyDataType { Id = new KeyClass { Id = 3 }, Ex = "X2" });
+
+                context.Set<ClassForeignKeyDataType>().AddRange(
+                    new ClassForeignKeyDataType { Id = new KeyClass { Id = 11 }, ClassKeyDataTypeId = new KeyClass { Id = 1 } },
+                    new ClassForeignKeyDataType { Id = new KeyClass { Id = 12 }, ClassKeyDataTypeId = new KeyClass { Id = 2 } },
+                    new ClassForeignKeyDataType { Id = new KeyClass { Id = 13 }, ClassKeyDataTypeId = new KeyClass { Id = 3 } });
+
+                Assert.Equal(6, context.SaveChanges());
+            }
+
+            ClassKeyDataType QueryByClassKey(DbContext context, KeyClass id)
+                => context
+                    .Set<ClassKeyDataType>()
+                    .Include(e => e.Dependents)
+                    .Where(e => e.Id.Equals(id))
+                    .ToList().Single();
+
+            using (var context = CreateContext())
+            {
+                var entity1 = QueryByClassKey(context, new KeyClass { Id = 1 });
+                Assert.Equal(new KeyClass { Id = 1 }, entity1.Id);
+                Assert.Equal(1, entity1.Dependents.Count);
+
+                var entity2 = QueryByClassKey(context, new KeyClass { Id = 2 });
+                Assert.Equal(new KeyClass { Id = 2 }, entity2.Id);
+                Assert.Equal(1, entity2.Dependents.Count);
+
+                var entity3 = QueryByClassKey(context, new KeyClass { Id = 3 });
+                Assert.Equal(new KeyClass { Id = 3 }, entity3.Id);
+                Assert.Equal(1, entity3.Dependents.Count);
+
+                entity3.Ex = "Xx1";
+                entity2.Ex = "Xx3";
+                entity1.Ex = "Xx7";
+
+                entity1.Dependents.Single().ClassKeyDataTypeId = new KeyClass { Id = 3 };
+                entity2.Dependents.Single().ClassKeyDataTypeId = new KeyClass { Id = 3 };
+
+                context.SaveChanges();
+            }
+
+            using (var context = CreateContext())
+            {
+                var entity1 = QueryByClassKey(context, new KeyClass { Id = 1 });
+                Assert.Equal("Xx7", entity1.Ex);
+                Assert.Equal(0, entity1.Dependents.Count);
+
+                var entity2 = QueryByClassKey(context, new KeyClass { Id = 2 });
+                Assert.Equal("Xx3", entity2.Ex);
+                Assert.Equal(0, entity2.Dependents.Count);
+
+                var entity3 = QueryByClassKey(context, new KeyClass { Id = 3 });
+                Assert.Equal("Xx1", entity3.Ex);
+                Assert.Equal(3, entity3.Dependents.Count);
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Can_insert_and_read_back_with_null_class_foreign_key()
+        {
+            using (var context = CreateContext())
+            {
+                context.Set<ClassForeignKeyDataType>().Add(new ClassForeignKeyDataType { Id = new KeyClass { Id = 78 } });
+
+                Assert.Equal(1, context.SaveChanges());
+            }
+
+            using (var context = CreateContext())
+            {
+                var entity = context.Set<ClassForeignKeyDataType>().Where(e => e.Id == new KeyClass { Id = 78 }).ToList().Single();
+
+                Assert.Null(entity.ClassKeyDataTypeId);
+            }
+        }
+
+        [ConditionalFact]
         public virtual void Can_insert_and_read_back_with_string_key()
         {
             using (var context = CreateContext())
@@ -2251,6 +2418,38 @@ namespace Microsoft.EntityFrameworkCore
                             AnimalId = 1,
                             Method = IdentificationMethod.EarTag
                         });
+
+                var structKeyConverter = new ValueConverter<KeyStruct, int>(
+                    v => v.Id, v => new KeyStruct { Id = v });
+
+                modelBuilder.Entity<StructKeyDataType>(
+                    b =>
+                    {
+                        b.Property(e => e.Id).HasConversion(structKeyConverter);
+                    });
+
+                modelBuilder.Entity<StructForeignKeyDataType>(
+                    b =>
+                    {
+                        b.Property(e => e.Id).HasConversion(structKeyConverter);
+                        b.Property(e => e.StructKeyDataTypeId).HasConversion(structKeyConverter);
+                    });
+
+                var classKeyConverter = new ValueConverter<KeyClass, int>(
+                    v => v.Id, v => new KeyClass { Id = v });
+
+                modelBuilder.Entity<ClassKeyDataType>(
+                    b =>
+                    {
+                        b.Property(e => e.Id).HasConversion(classKeyConverter);
+                    });
+
+                modelBuilder.Entity<ClassForeignKeyDataType>(
+                    b =>
+                    {
+                        b.Property(e => e.Id).HasConversion(classKeyConverter);
+                        b.Property(e => e.ClassKeyDataTypeId).HasConversion(classKeyConverter);
+                    });
             }
 
             protected static void MakeRequired<TEntity>(ModelBuilder modelBuilder)
@@ -2391,6 +2590,68 @@ namespace Microsoft.EntityFrameworkCore
             public byte[] BinaryKeyDataTypeId { get; set; }
 
             public BinaryKeyDataType Principal { get; set; }
+        }
+
+        protected class StructKeyDataType
+        {
+            public KeyStruct Id { get; set; }
+
+            public string Ex { get; set; }
+
+            public ICollection<StructForeignKeyDataType> Dependents { get; set; }
+        }
+
+        protected class StructForeignKeyDataType
+        {
+            public KeyStruct Id { get; set; }
+            public KeyStruct? StructKeyDataTypeId { get; set; }
+
+            public StructKeyDataType Principal { get; set; }
+        }
+
+#pragma warning disable 660,661
+        protected struct KeyStruct
+#pragma warning restore 660,661
+        {
+            public int Id { get; set; }
+
+            public static bool operator ==(KeyStruct left, KeyStruct right)
+                => left.Id == right.Id;
+
+            public static bool operator !=(KeyStruct left, KeyStruct right)
+                => left.Id != right.Id;
+        }
+
+        protected class ClassKeyDataType
+        {
+            public KeyClass Id { get; set; }
+
+            public string Ex { get; set; }
+
+            public ICollection<ClassForeignKeyDataType> Dependents { get; set; }
+        }
+
+        protected class ClassForeignKeyDataType
+        {
+            public KeyClass Id { get; set; }
+            public KeyClass ClassKeyDataTypeId { get; set; }
+
+            public ClassKeyDataType Principal { get; set; }
+        }
+
+        protected class KeyClass
+        {
+            protected bool Equals(KeyClass other)
+                => other != null && Id == other.Id;
+
+            public override bool Equals(object obj)
+                => obj == this
+                    || obj?.GetType() == GetType()
+                    && Equals((KeyClass)obj);
+
+            public override int GetHashCode() => Id;
+
+            public int Id { get; set; }
         }
 
         protected class StringKeyDataType
