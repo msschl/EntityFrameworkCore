@@ -15,6 +15,10 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 {
     public partial class NavigationExpandingExpressionVisitor
     {
+        /// <summary>
+        ///     Expands navigations in the given tree for given source.
+        ///     Optionally also expands navigations for includes.
+        /// </summary>
         private class ExpandingExpressionVisitor : ExpressionVisitor
         {
             private readonly NavigationExpandingExpressionVisitor _navigationExpandingExpressionVisitor;
@@ -28,6 +32,12 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 _source = source;
             }
 
+            /// <summary>
+            ///     Expands navigations in the given tree for given source.
+            ///     Optionally also expands navigations for includes.
+            /// </summary>
+            /// <param name="expression"> The query expression tree. </param>
+            /// <param name="applyIncludes"> Whether to also expand navigations for includes. </param>
             public Expression Expand(Expression expression, bool applyIncludes = false)
             {
                 expression = Visit(expression);
@@ -301,6 +311,10 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             }
         }
 
+        /// <summary>
+        ///     Expands an include tree. This is separate and needed because we may need to reconstruct parts of
+        ///     <see cref="NewExpression"/> to apply includes.
+        /// </summary>
         private sealed class IncludeExpandingExpressionVisitor : ExpandingExpressionVisitor
         {
             private readonly bool _isTracking;
@@ -502,6 +516,10 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             }
         }
 
+        /// <summary>
+        ///     <see cref="NavigationExpansionExpression"/> remembers the pending selector so we don't expand
+        ///     navigations unless we need to. This visitor applies them when we need to.
+        /// </summary>
         private sealed class PendingSelectorExpandingExpressionVisitor : ExpressionVisitor
         {
             private readonly NavigationExpandingExpressionVisitor _visitor;
@@ -534,6 +552,9 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             }
         }
 
+        /// <summary>
+        ///     Removes custom expressions from tree and converts it to LINQ again.
+        /// </summary>
         private sealed class ReducingExpressionVisitor : ExpressionVisitor
         {
             public override Expression Visit(Expression expression)
@@ -596,6 +617,11 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             }
         }
 
+        /// <summary>
+        ///     Marks <see cref="EntityReference"/> as nullable when coming from a left join.
+        ///     Nullability is required to figure out if the navigation from this entity should be a left join or
+        ///     an inner join.
+        /// </summary>
         private sealed class EntityReferenceOptionalMarkingExpressionVisitor : ExpressionVisitor
         {
             public override Expression Visit(Expression expression)
@@ -611,6 +637,9 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             }
         }
 
+        /// <summary>
+        ///     Allows self reference of query root inside query filters/defining queries.
+        /// </summary>
         private sealed class SelfReferenceEntityQueryableRewritingExpressionVisitor : ExpressionVisitor
         {
             private readonly NavigationExpandingExpressionVisitor _navigationExpandingExpressionVisitor;
