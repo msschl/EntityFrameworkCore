@@ -639,6 +639,15 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
             }
         }
 
+        /// <summary>
+        ///     This is an internal API that supports the Entity Framework Core infrastructure and not subject to
+        ///     the same compatibility standards as public APIs. It may be changed or removed without notice in
+        ///     any release. You should only use it directly in your code with extreme caution and knowing that
+        ///     doing so can result in application failures when updating to a new Entity Framework Core release.
+        /// </summary>
+        public virtual void MarkUnknown([NotNull] IProperty property)
+            => _stateData.FlagProperty(property.GetIndex(), PropertyFlag.Unknown, true);
+
         internal static readonly MethodInfo ReadShadowValueMethod
             = typeof(InternalEntityEntry).GetTypeInfo().GetDeclaredMethod(nameof(ReadShadowValue));
 
@@ -1154,11 +1163,11 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                         WritePropertyValue(propertyBase, value, isMaterialization);
 
                         if (currentValueType != CurrentValueType.Normal
-                            && !_temporaryValues.IsEmpty
-                            && equals(value, asProperty.ClrType.GetDefaultValue()))
+                            && !_temporaryValues.IsEmpty)
                         {
+                            var defaultValue = asProperty.ClrType.GetDefaultValue();
                             var storeGeneratedIndex = asProperty.GetStoreGeneratedIndex();
-                            _temporaryValues.SetValue(asProperty, value, storeGeneratedIndex);
+                            _temporaryValues.SetValue(asProperty, defaultValue, storeGeneratedIndex);
                         }
                     }
                     else
@@ -1285,6 +1294,13 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                             CoreStrings.PropertyReadOnlyBeforeSave(
                                 property.Name,
                                 EntityType.DisplayName()));
+                    }
+
+                    if (property.IsKey()
+                        && property.IsForeignKey()
+                        && _stateData.IsPropertyFlagged(property.GetIndex(), PropertyFlag.Unknown))
+                    {
+                        throw new InvalidOperationException(CoreStrings.UnknownKeyValue(entityType.DisplayName(), property.Name));
                     }
                 }
             }
@@ -1703,7 +1719,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
             builder
                 .Append(EntityType.DisplayName())
                 .Append(' ')
-                .Append(SharedIdentityEntry == null ? "(Shared) " : "")
+                .Append(SharedIdentityEntry != null ? "(Shared) " : "")
                 .Append(keyString)
                 .Append(' ')
                 .Append(EntityState.ToString());
