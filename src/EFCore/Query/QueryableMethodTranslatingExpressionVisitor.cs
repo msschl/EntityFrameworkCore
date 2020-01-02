@@ -56,13 +56,7 @@ namespace Microsoft.EntityFrameworkCore.Query
 
             ShapedQueryExpression CheckTranslated(ShapedQueryExpression translated)
             {
-                if (translated == null)
-                {
-                    throw new InvalidOperationException(
-                        CoreStrings.TranslationFailed(methodCallExpression.Print()));
-                }
-
-                return translated;
+                return translated ?? throw new InvalidOperationException(CoreStrings.TranslationFailed(methodCallExpression.Print()));
             }
 
             var method = methodCallExpression.Method;
@@ -532,15 +526,12 @@ namespace Microsoft.EntityFrameworkCore.Query
             {
                 Check.NotNull(node, nameof(node));
 
-                if (node is ProjectionBindingExpression projectionBindingExpression)
-                {
-                    return new ProjectionBindingExpression(
+                return node is ProjectionBindingExpression projectionBindingExpression
+                    ? new ProjectionBindingExpression(
                         _queryExpression,
                         projectionBindingExpression.ProjectionMember.Prepend(_memberShift),
-                        projectionBindingExpression.Type);
-                }
-
-                return base.VisitExtension(node);
+                        projectionBindingExpression.Type)
+                    : base.VisitExtension(node);
             }
         }
 

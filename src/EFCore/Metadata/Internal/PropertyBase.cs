@@ -80,8 +80,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         /// </summary>
         public virtual FieldInfo FieldInfo
         {
-            [DebuggerStepThrough] get => _fieldInfo;
-            [DebuggerStepThrough] set => SetField(value, ConfigurationSource.Explicit);
+            [DebuggerStepThrough]
+            get => _fieldInfo;
+            [DebuggerStepThrough]
+            set => SetField(value, ConfigurationSource.Explicit);
         }
 
         /// <summary>
@@ -149,6 +151,13 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             if (fieldInfo != null)
             {
                 IsCompatible(fieldInfo, ClrType, DeclaringType.ClrType, Name, shouldThrow: true);
+
+                if (PropertyInfo != null
+                    && PropertyInfo.IsIndexerProperty())
+                {
+                    throw new InvalidOperationException(
+                        CoreStrings.BackingFieldOnIndexer(fieldInfo.GetSimpleMemberName(), DeclaringType.DisplayName(), Name));
+                }
             }
 
             if (PropertyInfo == null
@@ -202,10 +211,9 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                 return false;
             }
 
-            var fieldTypeInfo = fieldInfo.FieldType;
+            var fieldType = fieldInfo.FieldType;
             if (propertyType != null
-                && !fieldTypeInfo.IsAssignableFrom(propertyType)
-                && !propertyType.IsAssignableFrom(fieldTypeInfo))
+                && !propertyType.IsCompatibleWith(fieldType))
             {
                 if (shouldThrow)
                 {

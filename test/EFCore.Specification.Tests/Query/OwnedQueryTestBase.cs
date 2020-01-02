@@ -418,6 +418,136 @@ namespace Microsoft.EntityFrameworkCore.Query
                 entryCount: 5);
         }
 
+        // Issue#18140
+        [ConditionalTheory]
+        [MemberData(nameof(IsAsyncData))]
+        public virtual Task Client_method_skip_loads_owned_navigations(bool async)
+        {
+            return AssertQuery(
+                async,
+                ss => ss.Set<OwnedPerson>().OrderBy(e => e.Id).Select(e => Map(e)).Skip(1));
+        }
+
+        [ConditionalTheory]
+        [MemberData(nameof(IsAsyncData))]
+        public virtual Task Client_method_take_loads_owned_navigations(bool async)
+        {
+            return AssertQuery(
+                async,
+                ss => ss.Set<OwnedPerson>().OrderBy(e => e.Id).Select(e => Map(e)).Take(2));
+        }
+
+        [ConditionalTheory]
+        [MemberData(nameof(IsAsyncData))]
+        public virtual Task Client_method_skip_take_loads_owned_navigations(bool async)
+        {
+            return AssertQuery(
+                async,
+                ss => ss.Set<OwnedPerson>().OrderBy(e => e.Id).Select(e => Map(e)).Skip(1).Take(2));
+        }
+
+        private static string Map(OwnedPerson person) => person.PersonAddress.Country.Name;
+
+        // Issue#18734
+        [ConditionalTheory]
+        [MemberData(nameof(IsAsyncData))]
+        public virtual Task Client_method_skip_loads_owned_navigations_variation_2(bool async)
+        {
+            return AssertQuery(
+                async,
+                ss => ss.Set<OwnedPerson>().OrderBy(e => e.Id).Select(e => Identity(e)).Skip(1));
+        }
+
+        [ConditionalTheory]
+        [MemberData(nameof(IsAsyncData))]
+        public virtual Task Client_method_take_loads_owned_navigations_variation_2(bool async)
+        {
+            return AssertQuery(
+                async,
+                ss => ss.Set<OwnedPerson>().OrderBy(e => e.Id).Select(e => Identity(e)).Take(2));
+        }
+
+        [ConditionalTheory]
+        [MemberData(nameof(IsAsyncData))]
+        public virtual Task Client_method_skip_take_loads_owned_navigations_variation_2(bool async)
+        {
+            return AssertQuery(
+                async,
+                ss => ss.Set<OwnedPerson>().OrderBy(e => e.Id).Select(e => Identity(e)).Skip(1).Take(2));
+        }
+
+        [ConditionalTheory]
+        [MemberData(nameof(IsAsyncData))]
+        public virtual Task Where_owned_collection_navigation_ToList_Count(bool async)
+        {
+            return AssertQuery(
+                async,
+                ss => ss.Set<OwnedPerson>()
+                    .OrderBy(p => p.Id)
+                    .Select(p => p.Orders.ToList())
+                    .Where(e => e.Count() == 0),
+                assertOrder: true,
+                elementAsserter: (e, a) => AssertCollection(e, a));
+        }
+
+        [ConditionalTheory]
+        [MemberData(nameof(IsAsyncData))]
+        public virtual Task Where_collection_navigation_ToArray_Count(bool async)
+        {
+            return AssertQuery(
+                async,
+                ss => ss.Set<OwnedPerson>()
+                    .OrderBy(p => p.Id)
+                    .Select(p => p.Orders.ToArray())
+                    .Where(e => e.Count() == 0),
+                assertOrder: true,
+                elementAsserter: (e, a) => AssertCollection(e, a));
+        }
+
+        [ConditionalTheory]
+        [MemberData(nameof(IsAsyncData))]
+        public virtual Task Where_collection_navigation_AsEnumerable_Count(bool async)
+        {
+            return AssertQuery(
+                async,
+                ss => ss.Set<OwnedPerson>()
+                    .OrderBy(p => p.Id)
+                    .Select(p => p.Orders.AsEnumerable())
+                    .Where(e => e.Count() == 0),
+                assertOrder: true,
+                elementAsserter: (e, a) => AssertCollection(e, a));
+        }
+
+        [ConditionalTheory]
+        [MemberData(nameof(IsAsyncData))]
+        public virtual Task Where_collection_navigation_ToList_Count_member(bool async)
+        {
+            return AssertQuery(
+                async,
+                ss => ss.Set<OwnedPerson>()
+                    .OrderBy(p => p.Id)
+                    .Select(p => p.Orders.ToList())
+                    .Where(e => e.Count == 0),
+                assertOrder: true,
+                elementAsserter: (e, a) => AssertCollection(e, a));
+        }
+
+        [ConditionalTheory(Skip = "Issue#19431")]
+        [MemberData(nameof(IsAsyncData))]
+        public virtual Task Where_collection_navigation_ToArray_Length_member(bool async)
+        {
+            return AssertQuery(
+                async,
+                ss => ss.Set<OwnedPerson>()
+                    .OrderBy(p => p.Id)
+                    .Select(p => p.Orders.ToArray())
+                    .Where(e => e.Length == 0),
+                assertOrder: true,
+                elementAsserter: (e, a) => AssertCollection(e, a));
+        }
+
+        private static OwnedPerson Identity(OwnedPerson person) => person;
+
         protected virtual DbContext CreateContext() => Fixture.CreateContext();
 
         public abstract class OwnedQueryFixtureBase : SharedStoreFixtureBase<PoolableDbContext>, IQueryFixtureBase
