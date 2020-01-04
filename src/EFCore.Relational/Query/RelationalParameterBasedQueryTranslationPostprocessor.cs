@@ -24,7 +24,7 @@ namespace Microsoft.EntityFrameworkCore.Query
 
         protected virtual bool UseRelationalNulls { get; }
 
-        public virtual (SelectExpression selectExpression, bool canCache) Optimize(
+        public virtual (SelectExpression, bool) Optimize(
             [NotNull] SelectExpression selectExpression,
             [NotNull] IReadOnlyDictionary<string, object> parametersValues)
         {
@@ -33,9 +33,9 @@ namespace Microsoft.EntityFrameworkCore.Query
 
             var canCache = true;
             var (sqlExpressionOptimized, optimizerCanCache) = new SqlExpressionOptimizingExpressionVisitor(
-                UseRelationalNulls,
                 Dependencies.SqlExpressionFactory,
-                parametersValues).OptimizeSqlExpression(selectExpression);
+                parametersValues,
+                UseRelationalNulls).OptimizeSqlExpression(selectExpression);
 
             canCache &= optimizerCanCache;
 
@@ -49,7 +49,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                 canCache = false;
             }
 
-            return (selectExpression: (SelectExpression)fromSqlParameterOptimized, canCache);
+            return ((SelectExpression)fromSqlParameterOptimized, canCache);
         }
     }
 }
