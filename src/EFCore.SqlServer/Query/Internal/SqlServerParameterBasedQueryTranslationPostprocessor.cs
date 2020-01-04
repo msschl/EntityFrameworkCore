@@ -18,7 +18,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.Query.Internal
         {
         }
 
-        public override (SelectExpression selectExpression, bool canCache) Optimize(
+        public override (SelectExpression, bool) Optimize(
             SelectExpression selectExpression,
             IReadOnlyDictionary<string, object> parametersValues)
         {

@@ -34,7 +34,7 @@ namespace Microsoft.EntityFrameworkCore.Query
             ParameterValues = parameterValues;
             UseRelationalNulls = useRelationalNulls;
 
-            CanOptimize = true;
+            CanOptimize = false;
             CanCache = true;
         }
 
@@ -53,40 +53,49 @@ namespace Microsoft.EntityFrameworkCore.Query
             return (selectExpression: (SelectExpression)Visit(selectExpression), canCache: CanCache);
         }
 
+        protected Expression VisitNonOptimizableExpression(Expression expression)
+        {
+            var currentNonNullableColumnsCount = NonNullableColumns.Count;
+            var canOptimize = CanOptimize;
+            CanOptimize = false;
+            IsNullable = false;
+            var resultExpression = Visit(expression);
+            CanOptimize = canOptimize;
+            RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
+
+            return resultExpression;
+        }
+
         protected override Expression VisitCase(CaseExpression caseExpression)
         {
             Check.NotNull(caseExpression, nameof(caseExpression));
 
-            IsNullable = false;
             // if there is no 'else' there is a possibility of null, when none of the conditions are met
             // otherwise the result is nullable if any of the WhenClause results OR ElseResult is nullable
             var isNullable = caseExpression.ElseResult == null;
-
             var currentNonNullableColumnsCount = NonNullableColumns.Count;
             var canOptimize = CanOptimize;
-            var testIsCondition = caseExpression.Operand == null;
-            CanOptimize = false;
-            var newOperand = (SqlExpression)Visit(caseExpression.Operand);
+
+            var newOperand = (SqlExpression)VisitNonOptimizableExpression(caseExpression.Operand);
             var newWhenClauses = new List<CaseWhenClause>();
+            var testIsCondition = caseExpression.Operand == null;
             foreach (var whenClause in caseExpression.WhenClauses)
             {
                 CanOptimize = testIsCondition;
-
-                var newTest = (SqlExpression)Visit(whenClause.Test);
-                CanOptimize = false;
                 IsNullable = false;
-                var newResult = (SqlExpression)Visit(whenClause.Result);
+                var newTest = (SqlExpression)Visit(whenClause.Test);
+
+                // we can use non-nullable column information we got from visiting Test, in the Result
+                var newResult = (SqlExpression)VisitNonOptimizableExpression(whenClause.Result);
+
                 isNullable |= IsNullable;
                 newWhenClauses.Add(new CaseWhenClause(newTest, newResult));
-
                 RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
             }
 
-            CanOptimize = false;
-            var newElseResult = (SqlExpression)Visit(caseExpression.ElseResult);
+            var newElseResult = (SqlExpression)VisitNonOptimizableExpression(caseExpression.ElseResult);
             IsNullable |= isNullable;
             CanOptimize = canOptimize;
-
             RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
 
             return caseExpression.Update(newOperand, newWhenClauses, newElseResult);
@@ -105,42 +114,24 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             Check.NotNull(crossApplyExpression, nameof(crossApplyExpression));
 
-            var currentNonNullableColumnsCount = NonNullableColumns.Count;
-            var canOptimize = CanOptimize;
-            CanOptimize = false;
-            var table = (TableExpressionBase)Visit(crossApplyExpression.Table);
-            CanOptimize = canOptimize;
-            RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
-
-            return crossApplyExpression.Update(table);
+            return crossApplyExpression.Update(
+                (TableExpressionBase)VisitNonOptimizableExpression(crossApplyExpression.Table));
         }
 
         protected override Expression VisitCrossJoin(CrossJoinExpression crossJoinExpression)
         {
             Check.NotNull(crossJoinExpression, nameof(crossJoinExpression));
 
-            var currentNonNullableColumnsCount = NonNullableColumns.Count;
-            var canOptimize = CanOptimize;
-            CanOptimize = false;
-            var table = (TableExpressionBase)Visit(crossJoinExpression.Table);
-            CanOptimize = canOptimize;
-            RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
-
-            return crossJoinExpression.Update(table);
+            return crossJoinExpression.Update(
+                (TableExpressionBase)VisitNonOptimizableExpression(crossJoinExpression.Table));
         }
 
         protected override Expression VisitExcept(ExceptExpression exceptExpression)
         {
             Check.NotNull(exceptExpression, nameof(exceptExpression));
 
-            var currentNonNullableColumnsCount = NonNullableColumns.Count;
-            var canOptimize = CanOptimize;
-            CanOptimize = false;
-            var source1 = (SelectExpression)Visit(exceptExpression.Source1);
-            RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
-            var source2 = (SelectExpression)Visit(exceptExpression.Source2);
-            CanOptimize = canOptimize;
-            RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
+            var source1 = (SelectExpression)VisitNonOptimizableExpression(exceptExpression.Source1);
+            var source2 = (SelectExpression)VisitNonOptimizableExpression(exceptExpression.Source2);
 
             return exceptExpression.Update(source1, source2);
         }
@@ -149,14 +140,8 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             Check.NotNull(existsExpression, nameof(existsExpression));
 
-            var currentNonNullableColumnsCount = NonNullableColumns.Count;
-            var canOptimize = CanOptimize;
-            CanOptimize = false;
-            var newSubquery = (SelectExpression)Visit(existsExpression.Subquery);
-            CanOptimize = canOptimize;
-            RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
-
-            return existsExpression.Update(newSubquery);
+            return existsExpression.Update(
+                (SelectExpression)VisitNonOptimizableExpression(existsExpression.Subquery));
         }
 
         protected override Expression VisitFromSql(FromSqlExpression fromSqlExpression)
@@ -291,14 +276,8 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             Check.NotNull(innerJoinExpression, nameof(innerJoinExpression));
 
-            var currentNonNullableColumnsCount = NonNullableColumns.Count;
-            var canOptimize = CanOptimize;
-            CanOptimize = false;
-            var newTable = (TableExpressionBase)Visit(innerJoinExpression.Table);
-            RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
+            var newTable = (TableExpressionBase)VisitNonOptimizableExpression(innerJoinExpression.Table);
             var newJoinPredicate = VisitJoinPredicate((SqlBinaryExpression)innerJoinExpression.JoinPredicate);
-            CanOptimize = canOptimize;
-            RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
 
             return newJoinPredicate is SqlConstantExpression constantJoinPredicate
                 && constantJoinPredicate.Value is bool boolPredicate
@@ -311,14 +290,8 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             Check.NotNull(intersectExpression, nameof(intersectExpression));
 
-            var currentNonNullableColumnsCount = NonNullableColumns.Count;
-            var canOptimize = CanOptimize;
-            CanOptimize = false;
-            var source1 = (SelectExpression)Visit(intersectExpression.Source1);
-            RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
-            var source2 = (SelectExpression)Visit(intersectExpression.Source2);
-            CanOptimize = canOptimize;
-            RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
+            var source1 = (SelectExpression)VisitNonOptimizableExpression(intersectExpression.Source1);
+            var source2 = (SelectExpression)VisitNonOptimizableExpression(intersectExpression.Source2);
 
             return intersectExpression.Update(source1, source2);
         }
@@ -327,14 +300,8 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             Check.NotNull(leftJoinExpression, nameof(leftJoinExpression));
 
-            var currentNonNullableColumnsCount = NonNullableColumns.Count;
-            var canOptimize = CanOptimize;
-            CanOptimize = false;
-            var newTable = (TableExpressionBase)Visit(leftJoinExpression.Table);
-            RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
+            var newTable = (TableExpressionBase)VisitNonOptimizableExpression(leftJoinExpression.Table);
             var newJoinPredicate = VisitJoinPredicate((SqlBinaryExpression)leftJoinExpression.JoinPredicate);
-            CanOptimize = canOptimize;
-            RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
 
             return leftJoinExpression.Update(newTable, newJoinPredicate);
         }
@@ -343,6 +310,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             var canOptimize = CanOptimize;
             CanOptimize = true;
+            var currentNonNullableColumnsCount = NonNullableColumns.Count;
 
             if (predicate.OperatorType == ExpressionType.Equal)
             {
@@ -350,6 +318,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                 var left = (SqlExpression)Visit(predicate.Left);
                 var leftNullable = IsNullable;
                 IsNullable = false;
+                RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
                 var right = (SqlExpression)Visit(predicate.Right);
                 var rightNullable = IsNullable;
 
@@ -362,6 +331,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                     CanOptimize);
 
                 CanOptimize = canOptimize;
+                RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
 
                 return result;
             }
@@ -370,6 +340,7 @@ namespace Microsoft.EntityFrameworkCore.Query
             {
                 var newPredicate = (SqlExpression)VisitSqlBinary(predicate);
                 CanOptimize = canOptimize;
+                RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
 
                 return newPredicate;
             }
@@ -379,82 +350,60 @@ namespace Microsoft.EntityFrameworkCore.Query
 
         protected override Expression VisitLike(LikeExpression likeExpression)
         {
-            var currentNonNullableColumnsCount = NonNullableColumns.Count;
-            var canOptimize = CanOptimize;
-            CanOptimize = false;
-            IsNullable = false;
-            var newMatch = (SqlExpression)Visit(likeExpression.Match);
-            RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
+            var match = (SqlExpression)VisitNonOptimizableExpression(likeExpression.Match);
             var isNullable = IsNullable;
-            IsNullable = false;
-            var newPattern = (SqlExpression)Visit(likeExpression.Pattern);
-            RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
+            var pattern = (SqlExpression)VisitNonOptimizableExpression(likeExpression.Pattern);
             isNullable |= IsNullable;
-            IsNullable = false;
-            var newEscapeChar = (SqlExpression)Visit(likeExpression.EscapeChar);
+            var escapeChar = (SqlExpression)VisitNonOptimizableExpression(likeExpression.EscapeChar);
             IsNullable |= isNullable;
-            CanOptimize = canOptimize;
-            RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
 
-            return likeExpression.Update(newMatch, newPattern, newEscapeChar);
+            return likeExpression.Update(match, pattern, escapeChar);
         }
 
         protected override Expression VisitOrdering(OrderingExpression orderingExpression)
         {
             Check.NotNull(orderingExpression, nameof(orderingExpression));
 
-            var expression = (SqlExpression)Visit(orderingExpression.Expression);
-
-            return orderingExpression.Update(expression);
+            return orderingExpression.Update(
+                (SqlExpression)VisitNonOptimizableExpression(orderingExpression.Expression));
         }
 
         protected override Expression VisitOuterApply(OuterApplyExpression outerApplyExpression)
         {
             Check.NotNull(outerApplyExpression, nameof(outerApplyExpression));
 
-            var currentNonNullableColumnsCount = NonNullableColumns.Count;
-            var canOptimize = CanOptimize;
-            CanOptimize = false;
-            var table = (TableExpressionBase)Visit(outerApplyExpression.Table);
-            CanOptimize = canOptimize;
-            RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
-
-            return outerApplyExpression.Update(table);
+            return outerApplyExpression.Update(
+                (TableExpressionBase)VisitNonOptimizableExpression(outerApplyExpression.Table));
         }
 
         protected override Expression VisitProjection(ProjectionExpression projectionExpression)
         {
             Check.NotNull(projectionExpression, nameof(projectionExpression));
 
-            var expression = (SqlExpression)Visit(projectionExpression.Expression);
-
-            return projectionExpression.Update(expression);
+            return projectionExpression.Update(
+                (SqlExpression)VisitNonOptimizableExpression(projectionExpression.Expression));
         }
 
         protected override Expression VisitRowNumber(RowNumberExpression rowNumberExpression)
         {
             Check.NotNull(rowNumberExpression, nameof(rowNumberExpression));
 
-            var currentNonNullableColumnsCount = NonNullableColumns.Count;
             var canOptimize = CanOptimize;
-            CanOptimize = false;
             var changed = false;
             var partitions = new List<SqlExpression>();
             foreach (var partition in rowNumberExpression.Partitions)
             {
-                var newPartition = (SqlExpression)Visit(partition);
+                var newPartition = (SqlExpression)VisitNonOptimizableExpression(partition);
                 changed |= newPartition != partition;
                 partitions.Add(newPartition);
-                RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
             }
 
             var orderings = new List<OrderingExpression>();
             foreach (var ordering in rowNumberExpression.Orderings)
             {
-                var newOrdering = (OrderingExpression)Visit(ordering);
+                var newOrdering = (OrderingExpression)VisitNonOptimizableExpression(ordering);
                 changed |= newOrdering != ordering;
                 orderings.Add(newOrdering);
-                RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
             }
 
             CanOptimize = canOptimize;
@@ -466,14 +415,8 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             Check.NotNull(scalarSubqueryExpression, nameof(scalarSubqueryExpression));
 
-            var currentNonNullableColumnsCount = NonNullableColumns.Count;
-            var canOptimize = CanOptimize;
-            CanOptimize = false;
-            var subquery = (SelectExpression)Visit(scalarSubqueryExpression.Subquery);
-            CanOptimize = canOptimize;
-            RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
-
-            return scalarSubqueryExpression.Update(subquery);
+            return scalarSubqueryExpression.Update(
+                (SelectExpression)VisitNonOptimizableExpression(scalarSubqueryExpression.Subquery));
         }
 
         protected override Expression VisitSelect(SelectExpression selectExpression)
@@ -482,30 +425,25 @@ namespace Microsoft.EntityFrameworkCore.Query
 
             var changed = false;
             var canOptimize = CanOptimize;
-            var projections = new List<ProjectionExpression>();
-            CanOptimize = false;
-
             var currentNonNullableColumnsCount = NonNullableColumns.Count;
+            var projections = new List<ProjectionExpression>();
             foreach (var item in selectExpression.Projection)
             {
-                var updatedProjection = (ProjectionExpression)Visit(item);
+                var updatedProjection = (ProjectionExpression)VisitNonOptimizableExpression(item);
                 projections.Add(updatedProjection);
                 changed |= updatedProjection != item;
-
-                RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
             }
 
             var tables = new List<TableExpressionBase>();
             foreach (var table in selectExpression.Tables)
             {
-                var newTable = (TableExpressionBase)Visit(table);
+                var newTable = (TableExpressionBase)VisitNonOptimizableExpression(table);
                 changed |= newTable != table;
                 tables.Add(newTable);
-
-                RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
             }
 
             CanOptimize = true;
+            IsNullable = false;
             var predicate = (SqlExpression)Visit(selectExpression.Predicate);
             changed |= predicate != selectExpression.Predicate;
 
@@ -520,17 +458,15 @@ namespace Microsoft.EntityFrameworkCore.Query
             RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
 
             var groupBy = new List<SqlExpression>();
-            CanOptimize = false;
             foreach (var groupingKey in selectExpression.GroupBy)
             {
-                var newGroupingKey = (SqlExpression)Visit(groupingKey);
+                var newGroupingKey = (SqlExpression)VisitNonOptimizableExpression(groupingKey);
                 changed |= newGroupingKey != groupingKey;
                 groupBy.Add(newGroupingKey);
-
-                RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
             }
 
             CanOptimize = true;
+            IsNullable = false;
             var having = (SqlExpression)Visit(selectExpression.Having);
             changed |= having != selectExpression.Having;
 
@@ -545,29 +481,22 @@ namespace Microsoft.EntityFrameworkCore.Query
             RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
 
             var orderings = new List<OrderingExpression>();
-            CanOptimize = false;
             foreach (var ordering in selectExpression.Orderings)
             {
-                var orderingExpression = (SqlExpression)Visit(ordering.Expression);
+                var orderingExpression = (SqlExpression)VisitNonOptimizableExpression(ordering.Expression);
                 changed |= orderingExpression != ordering.Expression;
                 orderings.Add(ordering.Update(orderingExpression));
-
-                RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
             }
 
-            var offset = (SqlExpression)Visit(selectExpression.Offset);
+            var offset = (SqlExpression)VisitNonOptimizableExpression(selectExpression.Offset);
             changed |= offset != selectExpression.Offset;
 
-            RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
-
-            var limit = (SqlExpression)Visit(selectExpression.Limit);
+            var limit = (SqlExpression)VisitNonOptimizableExpression(selectExpression.Limit);
             changed |= limit != selectExpression.Limit;
-
-            RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
 
             CanOptimize = canOptimize;
 
-            // we assume SelectExpression can always be null
+            // SelectExpression can always yield null
             // (e.g. projecting non-nullable column but with predicate that filters out all rows)
             IsNullable = true;
 
@@ -1037,36 +966,26 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             Check.NotNull(sqlFunctionExpression, nameof(sqlFunctionExpression));
 
-            var currentNonNullableColumnsCount = NonNullableColumns.Count;
+            //var currentNonNullableColumnsCount = NonNullableColumns.Count;
             var canOptimize = CanOptimize;
-            CanOptimize = false;
 
             if (sqlFunctionExpression.IsBuiltIn
                 && string.Equals(sqlFunctionExpression.Name, "COALESCE", StringComparison.OrdinalIgnoreCase))
             {
-                IsNullable = false;
-                var newLeft = (SqlExpression)Visit(sqlFunctionExpression.Arguments[0]);
-                RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
+                var left = (SqlExpression)VisitNonOptimizableExpression(sqlFunctionExpression.Arguments[0]);
                 var leftNullable = IsNullable;
-
-                IsNullable = false;
-                var newRight = (SqlExpression)Visit(sqlFunctionExpression.Arguments[1]);
-                RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
+                var right = (SqlExpression)VisitNonOptimizableExpression(sqlFunctionExpression.Arguments[1]);
                 var rightNullable = IsNullable;
-
                 IsNullable = leftNullable && rightNullable;
-                CanOptimize = canOptimize;
 
-                return sqlFunctionExpression.Update(sqlFunctionExpression.Instance, new[] { newLeft, newRight });
+                return sqlFunctionExpression.Update(sqlFunctionExpression.Instance, new[] { left, right });
             }
 
-            var newInstance = (SqlExpression)Visit(sqlFunctionExpression.Instance);
-            RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
-            var newArguments = new SqlExpression[sqlFunctionExpression.Arguments.Count];
-            for (var i = 0; i < newArguments.Length; i++)
+            var instance = (SqlExpression)VisitNonOptimizableExpression(sqlFunctionExpression.Instance);
+            var arguments = new SqlExpression[sqlFunctionExpression.Arguments.Count];
+            for (var i = 0; i < arguments.Length; i++)
             {
-                newArguments[i] = (SqlExpression)Visit(sqlFunctionExpression.Arguments[i]);
-                RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
+                arguments[i] = (SqlExpression)VisitNonOptimizableExpression(sqlFunctionExpression.Arguments[i]);
             }
 
             CanOptimize = canOptimize;
@@ -1074,7 +993,7 @@ namespace Microsoft.EntityFrameworkCore.Query
             // TODO: #18555
             IsNullable = true;
 
-            return sqlFunctionExpression.Update(newInstance, newArguments);
+            return sqlFunctionExpression.Update(instance, arguments);
         }
 
         protected override Expression VisitSqlParameter(SqlParameterExpression sqlParameterExpression)
@@ -1092,15 +1011,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             Check.NotNull(sqlUnaryExpression, nameof(sqlUnaryExpression));
 
-            var currentNonNullableColumnsCount = NonNullableColumns.Count;
-            IsNullable = false;
-            var canOptimize = CanOptimize;
-            CanOptimize = false;
-
-            var operand = (SqlExpression)Visit(sqlUnaryExpression.Operand);
-            RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
-
-            CanOptimize = canOptimize;
+            var operand = (SqlExpression)VisitNonOptimizableExpression(sqlUnaryExpression.Operand);
             var updated = sqlUnaryExpression.Update(operand);
 
             if (sqlUnaryExpression.OperatorType == ExpressionType.Equal
@@ -1377,14 +1288,8 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             Check.NotNull(unionExpression, nameof(unionExpression));
 
-            var currentNonNullableColumnsCount = NonNullableColumns.Count;
-            var canOptimize = CanOptimize;
-            CanOptimize = false;
-            var source1 = (SelectExpression)Visit(unionExpression.Source1);
-            RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
-            var source2 = (SelectExpression)Visit(unionExpression.Source2);
-            CanOptimize = canOptimize;
-            RestoreNonNullableColumnsList(currentNonNullableColumnsCount);
+            var source1 = (SelectExpression)VisitNonOptimizableExpression(unionExpression.Source1);
+            var source2 = (SelectExpression)VisitNonOptimizableExpression(unionExpression.Source2);
 
             return unionExpression.Update(source1, source2);
         }
