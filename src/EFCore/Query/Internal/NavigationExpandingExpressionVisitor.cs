@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -1434,7 +1433,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             }
 
             return expression is OwnedNavigationReference ownedNavigationReference
-                && ownedNavigationReference.Navigation.IsCollection()
+                && ownedNavigationReference.Navigation.IsCollection
                 ? CreateNavigationExpansionExpression(
                     Expression.Call(
                         QueryableMethods.AsQueryable.MakeGenericMethod(ownedNavigationReference.Type.TryGetSequenceType()),
@@ -1462,7 +1461,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             var outboundNavigations
                 = entityType.GetNavigations()
                     .Concat(entityType.GetDerivedNavigations())
-                    .Where(n => n.IsEagerLoaded());
+                    .Where(n => n.IsEagerLoaded);
 
             foreach (var navigation in outboundNavigations)
             {

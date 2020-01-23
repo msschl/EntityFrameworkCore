@@ -30,6 +30,14 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
     public class ModelValidator : IModelValidator
     {
         /// <summary>
+        ///     This is an internal API that supports the Entity Framework Core infrastructure and not subject to
+        ///     the same compatibility standards as public APIs. It may be changed or removed without notice in
+        ///     any release. You should only use it directly in your code with extreme caution and knowing that
+        ///     doing so can result in application failures when updating to a new Entity Framework Core release.
+        /// </summary>
+        public const string SkipChangeTrackingStrategyValidationAnnotation = "ModelValidator.SkipChangeTrackingStrategyValidation";
+
+        /// <summary>
         ///     Creates a new instance of <see cref="ModelValidator" />.
         /// </summary>
         /// <param name="dependencies"> Parameter object containing dependencies for this service. </param>
@@ -591,12 +599,15 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         {
             Check.NotNull(model, nameof(model));
 
-            foreach (var entityType in model.GetEntityTypes())
+            if ((string)model[SkipChangeTrackingStrategyValidationAnnotation] != "true")
             {
-                var errorMessage = entityType.AsEntityType().CheckChangeTrackingStrategy(entityType.GetChangeTrackingStrategy());
-                if (errorMessage != null)
+                foreach (var entityType in model.GetEntityTypes())
                 {
-                    throw new InvalidOperationException(errorMessage);
+                    var errorMessage = entityType.AsEntityType().CheckChangeTrackingStrategy(entityType.GetChangeTrackingStrategy());
+                    if (errorMessage != null)
+                    {
+                        throw new InvalidOperationException(errorMessage);
+                    }
                 }
             }
         }
@@ -1010,8 +1021,8 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
                     foreach (var navigation in entityType.GetNavigations())
                     {
                         if (seedDatum.TryGetValue(navigation.Name, out var value)
-                            && ((navigation.IsCollection() && value is IEnumerable collection && collection.Any())
-                                || (!navigation.IsCollection() && value != null)))
+                            && ((navigation.IsCollection && value is IEnumerable collection && collection.Any())
+                                || (!navigation.IsCollection && value != null)))
                         {
                             if (sensitiveDataLogged)
                             {
@@ -1020,7 +1031,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
                                         entityType.DisplayName(),
                                         string.Join(", ", key.Properties.Select((p, i) => p.Name + ":" + keyValues[i])),
                                         navigation.Name,
-                                        navigation.GetTargetType().DisplayName(),
+                                        navigation.TargetEntityType.DisplayName(),
                                         navigation.ForeignKey.Properties.Format()));
                             }
 
@@ -1028,7 +1039,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
                                 CoreStrings.SeedDatumNavigation(
                                     entityType.DisplayName(),
                                     navigation.Name,
-                                    navigation.GetTargetType().DisplayName(),
+                                    navigation.TargetEntityType.DisplayName(),
                                     navigation.ForeignKey.Properties.Format()));
                         }
                     }

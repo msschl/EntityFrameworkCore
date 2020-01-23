@@ -104,6 +104,24 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     any release. You should only use it directly in your code with extreme caution and knowing that
         ///     doing so can result in application failures when updating to a new Entity Framework Core release.
         /// </summary>
+        public EntityType([NotNull] string name, [NotNull] Type clrType, [NotNull] Model model, ConfigurationSource configurationSource)
+            : base(name, clrType, model, configurationSource)
+        {
+            if (!clrType.IsValidEntityType())
+            {
+                throw new ArgumentException(CoreStrings.InvalidEntityType(clrType));
+            }
+
+            _properties = new SortedDictionary<string, Property>(new PropertyNameComparer(this));
+            Builder = new InternalEntityTypeBuilder(this, model.Builder);
+        }
+
+        /// <summary>
+        ///     This is an internal API that supports the Entity Framework Core infrastructure and not subject to
+        ///     the same compatibility standards as public APIs. It may be changed or removed without notice in
+        ///     any release. You should only use it directly in your code with extreme caution and knowing that
+        ///     doing so can result in application failures when updating to a new Entity Framework Core release.
+        /// </summary>
         public EntityType(
             [NotNull] string name,
             [NotNull] Model model,
@@ -1362,7 +1380,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             }
 
             Check.DebugAssert(
-                !GetNavigations().Any(n => n.ForeignKey == foreignKey && n.IsDependentToPrincipal() == pointsToPrincipal),
+                !GetNavigations().Any(n => n.ForeignKey == foreignKey && n.IsOnDependent == pointsToPrincipal),
                 "There is another navigation corresponding to the same foreign key and pointing in the same direction.");
 
             Check.DebugAssert(
@@ -1520,7 +1538,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             [NotNull] EntityType targetEntityType,
             [CanBeNull] ForeignKey foreignKey,
             bool collection,
-            bool onPrincipal,
+            bool onDependent,
             ConfigurationSource configurationSource)
         {
             Check.NotEmpty(name, nameof(name));
@@ -1562,7 +1580,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                 targetEntityType,
                 foreignKey,
                 collection,
-                onPrincipal,
+                onDependent,
                 configurationSource);
 
             _skipNavigations.Add(name, skipNavigation);
@@ -3189,8 +3207,8 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             [NotNull] IMutableEntityType targetEntityType,
             [NotNull] IMutableForeignKey foreignKey,
             bool collection,
-            bool onPrincipal)
-            => AddSkipNavigation(name, memberInfo, (EntityType)targetEntityType, (ForeignKey)foreignKey, collection, onPrincipal,
+            bool onDependent)
+            => AddSkipNavigation(name, memberInfo, (EntityType)targetEntityType, (ForeignKey)foreignKey, collection, onDependent,
                 ConfigurationSource.Explicit);
 
         /// <summary>
@@ -3206,9 +3224,9 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             [NotNull] IConventionEntityType targetEntityType,
             [NotNull] IConventionForeignKey foreignKey,
             bool collection,
-            bool onPrincipal,
+            bool onDependent,
             bool fromDataAnnotation)
-            => AddSkipNavigation(name, memberInfo, (EntityType)targetEntityType, (ForeignKey)foreignKey, collection, onPrincipal,
+            => AddSkipNavigation(name, memberInfo, (EntityType)targetEntityType, (ForeignKey)foreignKey, collection, onDependent,
                 fromDataAnnotation ? ConfigurationSource.DataAnnotation : ConfigurationSource.Convention);
 
         /// <summary>

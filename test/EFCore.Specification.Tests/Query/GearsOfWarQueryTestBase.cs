@@ -7164,7 +7164,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                 ss => ss.Set<Gear>().Where(g => false));
         }
 
-        [ConditionalTheory(Skip = "issue #19019")]
+        [ConditionalTheory]
         [MemberData(nameof(IsAsyncData))]
         public virtual Task OrderBy_StartsWith_with_null_parameter_as_argument(bool async)
         {
@@ -7175,6 +7175,18 @@ namespace Microsoft.EntityFrameworkCore.Query
                 ss => ss.Set<Gear>().OrderBy(g => g.FullName.StartsWith(prm)).ThenBy(g => g.Nickname),
                 ss => ss.Set<Gear>().OrderBy(g => false).ThenBy(g => g.Nickname),
                 assertOrder: true);
+        }
+
+        [ConditionalTheory]
+        [MemberData(nameof(IsAsyncData))]
+        public virtual Task OrderBy_Contains_empty_list(bool async)
+        {
+            var ids = new List<int>();
+
+            return AssertQuery(
+                async,
+                ss => ss.Set<Gear>().OrderBy(g => ids.Contains(g.SquadId)).Select(g => g),
+                ss => ss.Set<Gear>().OrderBy(g => ids.Contains(g.SquadId)).Select(g => g));
         }
 
         [ConditionalTheory]
@@ -7505,6 +7517,25 @@ namespace Microsoft.EntityFrameworkCore.Query
                 isAsync,
                 ss => ss.Set<Gear>().Where(g => ss.Set<City>().Where(c => c.Name == g.CityOfBirthName).FirstOrDefault()["Nation"] == null));
         }
+
+        [ConditionalTheory]
+        [MemberData(nameof(IsAsyncData))]
+        public virtual Task Conditional_with_conditions_evaluating_to_false_gets_optimized(bool isAsync)
+        {
+            return AssertQuery(
+                isAsync,
+                ss => ss.Set<Gear>().Select(g => g.Nickname == null && g.Nickname != null ? g.CityOfBirthName : g.FullName));
+        }
+
+        [ConditionalTheory]
+        [MemberData(nameof(IsAsyncData))]
+        public virtual Task Conditional_with_conditions_evaluating_to_true_gets_optimized(bool isAsync)
+        {
+            return AssertQuery(
+                isAsync,
+                ss => ss.Set<Gear>().Select(g => g.Nickname == null || g.Nickname != null ? g.CityOfBirthName : g.FullName));
+        }
+
 
         protected GearsOfWarContext CreateContext() => Fixture.CreateContext();
 
